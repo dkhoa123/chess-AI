@@ -10,10 +10,10 @@ import {isWhiteTurn, canPlayerMove} from './components/gameLogic/turn.js'
 import {getInitialCastlingRights,applyCastleMove, updateCastlingRights} from './components/gameLogic/castling.js'
 
 import GameSetup from './components/gameSetup/gameSetup.jsx';
-
 import Board from './components/Board/Board.jsx';
 import GameInfo from './components/gameSetup/gameInfo.jsx';
 import {getAIMove} from './components/ai/AI.js';
+import PromotionModal from './components/gameLogic/PromotionModal.jsx';
 
 function App() {
     const [gameStarted, setGameStarted] = useState(false);
@@ -25,13 +25,13 @@ function App() {
     const [validMoves, setValidMoves] = useState([]);
     const [isAIThinking, setIsAIThinking] = useState(false);
     const [castlingRights, setCastlingRights] = useState(getInitialCastlingRights());
+    const [pendingPromotion, setPendingPromotion] = useState(null);
 
     function handleStartGame(settings) {
         setGameSettings(settings);
         setGameStarted(true);
     }
 
-    
     function resetGame() {
         setGameStarted(false);
         setGameSettings(null);
@@ -42,10 +42,11 @@ function App() {
         setValidMoves([]);
         setIsAIThinking(false);
         setCastlingRights(getInitialCastlingRights());
+        setPendingPromotion(null);
     }
 
     function handleClick(row, col) {
-        if (gameOver || isAIThinking) return;
+        if (gameOver || isAIThinking || pendingPromotion) return;
 
         const currentIsWhiteTurn = isWhiteTurn(moveCount);
         const playerIsWhite = gameSettings.playerColor === 'white';
@@ -55,7 +56,6 @@ function App() {
             const piece = board[row][col];
             if (piece && canPlayerMove(piece, currentIsWhiteTurn)) {
                 setSelected({ row, col });
-                // Truyền castlingRights vào để tính cả nước nhập thành
                 const moves = getValidMovesForPiece(board, row, col, castlingRights);
                 setValidMoves(moves);
             }
@@ -67,7 +67,6 @@ function App() {
                 setSelected(null);
                 setValidMoves([]);
             } else {
-                // Click vào quân cùng màu khác → đổi chọn
                 const piece = board[row][col];
                 if (piece && canPlayerMove(piece, currentIsWhiteTurn)) {
                     setSelected({ row, col });
@@ -95,9 +94,20 @@ function App() {
             newBoard[toRow][toCol] = piece;
         }
 
-        // Cập nhật quyền nhập thành
         const newRights = updateCastlingRights(castlingRights, fromRow, fromCol, piece);
         setCastlingRights(newRights);
+
+        const isWhite = piece[0] === 'w';
+        const isPawn = piece[1] === 'p';
+        const isPromotionRow = (isWhite && toRow === 0) || (!isWhite && toRow === 7);
+
+        if (isPawn && isPromotionRow) {
+            setBoard(newBoard);
+            setMoveCount(prev => prev + 1);
+            // Lưu newRights vào pendingPromotion (không dùng state castlingRights vì chưa cập nhật)
+            setPendingPromotion({ row: toRow, col: toCol, isWhite, newBoard, newRights });
+            return;
+        }
 
         setBoard(newBoard);
         const newMoveCount = moveCount + 1;
@@ -105,14 +115,31 @@ function App() {
 
         const nextIsWhiteTurn = isWhiteTurn(newMoveCount);
         const status = getGameStatus(newBoard, nextIsWhiteTurn, newRights);
+        if (status.status === 'checkmate' || status.status === 'stalemate') {
+            setGameOver(true);
+        }
+    }
 
+    function handlePromotion(pieceType) {
+        if (!pendingPromotion) return;
+        const { row, col, isWhite, newBoard, newRights } = pendingPromotion;
+
+        const promotedBoard = newBoard.map(r => [...r]);
+        promotedBoard[row][col] = (isWhite ? 'w' : 'b') + pieceType;
+
+        setBoard(promotedBoard);
+        setPendingPromotion(null);
+
+        // moveCount đã được +1 trong movePiece rồi, dùng thẳng
+        const nextIsWhiteTurn = isWhiteTurn(moveCount);
+        const status = getGameStatus(promotedBoard, nextIsWhiteTurn, newRights);
         if (status.status === 'checkmate' || status.status === 'stalemate') {
             setGameOver(true);
         }
     }
 
     useEffect(() => {
-        if (gameOver || !gameStarted || !gameSettings) return;
+        if (gameOver || !gameStarted || !gameSettings || pendingPromotion) return;
 
         const currentIsWhiteTurn = isWhiteTurn(moveCount);
         const playerIsWhite = gameSettings.playerColor === 'white';
@@ -136,6 +163,11 @@ function App() {
                         newBoard[aiMove.to.row][aiMove.to.col] = piece;
                     }
 
+                    // AI tự động phong hậu
+                    if (piece[1] === 'p' && ((piece[0] === 'w' && aiMove.to.row === 0) || (piece[0] === 'b' && aiMove.to.row === 7))) {
+                        newBoard[aiMove.to.row][aiMove.to.col] = piece[0] + 'q';
+                    }
+
                     const newRights = updateCastlingRights(castlingRights, aiMove.from.row, aiMove.from.col, piece);
                     setCastlingRights(newRights);
 
@@ -156,7 +188,7 @@ function App() {
 
             return () => clearTimeout(timer);
         }
-    }, [moveCount, gameOver, gameStarted, gameSettings]);
+    }, [moveCount, gameOver, gameStarted, gameSettings, pendingPromotion]);
 
     if (!gameStarted) {
         return <GameSetup onStartGame={handleStartGame} />;
@@ -180,6 +212,9 @@ function App() {
                 onCellClick={handleClick}
                 playerIsWhite={gameSettings.playerColor === 'white'}
             />
+            {pendingPromotion && (
+                <PromotionModal isWhite={pendingPromotion.isWhite} onSelect={handlePromotion} />
+            )}
         </>
     );
 }
