@@ -1,222 +1,139 @@
 import './App.css'
 import './components/Board/board.css'
-import { initialBoard } from './components/Board/board.js'
+import { useState } from 'react';
+import { getGameStatus } from './components/gameLogic/gameStatus.js';
+import { isWhiteTurn } from './components/gameLogic/turn.js';
+import { loadGameState } from './components/gameLogic/moveHistory.js';
 
-import {useState, useEffect} from 'react';
-import {isValidMove} from './components/gameLogic/movement.js'
-import {isMoveLegal} from './components/gameLogic/check.js'
-import {getValidMovesForPiece, getGameStatus } from './components/gameLogic/gameStatus.js'
-import {isWhiteTurn, canPlayerMove} from './components/gameLogic/turn.js'
-import {getInitialCastlingRights,applyCastleMove, updateCastlingRights} from './components/gameLogic/castling.js'
+import { useGameState }   from './components/hooks/useGameState.js';
+import { usePlayerInput } from './components/hooks/usePlayerInput.js';
+import { useAIMove }      from './components/hooks/useAIMove.js';
 
-import GameSetup from './components/gameSetup/gameSetup.jsx';
-import Board from './components/Board/Board.jsx';
-import GameInfo from './components/gameSetup/gameInfo.jsx';
-import {getAIMove} from './components/ai/AI.js';
-import PromotionModal from './components/gameLogic/PromotionModal.jsx';
+import GameSetup        from './components/gameSetup/gameSetup.jsx';
+import Board            from './components/Board/Board.jsx';
+import TopBar           from './components/ui/TopBar.jsx';
+import BoardWithCoords  from './components/ui/BoardWithCoords.jsx';
+import MoveHistoryPanel from './components/gameSetup/MoveHistoryPanel.jsx';
+import ConfirmDialog    from './components/ui/ConfirmDialog.jsx';
+import PromotionModal   from './components/gameLogic/PromotionModal.jsx';
 
-function App() {
-    const [gameStarted, setGameStarted] = useState(false);
-    const [gameSettings, setGameSettings] = useState(null);
-    const [selected, setSelected] = useState(null);
-    const [board, setBoard] = useState(initialBoard);
-    const [moveCount, setMoveCount] = useState(0);
-    const [gameOver, setGameOver] = useState(false);
-    const [validMoves, setValidMoves] = useState([]);
-    const [isAIThinking, setIsAIThinking] = useState(false);
-    const [castlingRights, setCastlingRights] = useState(getInitialCastlingRights());
-    const [pendingPromotion, setPendingPromotion] = useState(null);
+export default function App() {
+  const game = useGameState();
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
-    function handleStartGame(settings) {
-        setGameSettings(settings);
-        setGameStarted(true);
-    }
+  const playerIsWhite = game.gameSettings?.playerColor === 'white';
 
-    function resetGame() {
-        setGameStarted(false);
-        setGameSettings(null);
-        setSelected(null);
-        setBoard(initialBoard);
-        setMoveCount(0);
-        setGameOver(false);
-        setValidMoves([]);
-        setIsAIThinking(false);
-        setCastlingRights(getInitialCastlingRights());
-        setPendingPromotion(null);
-    }
+  const { isAIThinking } = useAIMove({
+    board: game.board,
+    moveCount: game.moveCount,
+    castlingRights: game.castlingRights,
+    gameOver: game.gameOver,
+    gameStarted: game.gameStarted,
+    gameSettings: game.gameSettings,
+    pendingPromotion: game.pendingPromotion,
+    onMove: game.makeMove,
+  });
 
-    function handleClick(row, col) {
-        if (gameOver || isAIThinking || pendingPromotion) return;
+  const input = usePlayerInput({
+    board: game.board,
+    moveCount: game.moveCount,
+    castlingRights: game.castlingRights,
+    gameOver: game.gameOver,
+    isAIThinking,
+    pendingPromotion: game.pendingPromotion,
+    playerIsWhite,
+    onMove: game.makeMove,
+    onSaveSnapshot: game.saveSnapshotForUndo,
+  });
 
-        const currentIsWhiteTurn = isWhiteTurn(moveCount);
-        const playerIsWhite = gameSettings.playerColor === 'white';
-        if (currentIsWhiteTurn !== playerIsWhite) return;
+  function handleExitToLobby() {
+    setConfirmDialog({
+      message: 'Thoát về sảnh?\nTiến trình sẽ được lưu để tiếp tục sau.',
+      onConfirm: () => { setConfirmDialog(null); game.exitToLobby(); input.reset(); },
+    });
+  }
 
-        if (selected == null) {
-            const piece = board[row][col];
-            if (piece && canPlayerMove(piece, currentIsWhiteTurn)) {
-                setSelected({ row, col });
-                const moves = getValidMovesForPiece(board, row, col, castlingRights);
-                setValidMoves(moves);
-            }
-        } else {
-            if (isValidMove(board, selected.row, selected.col, row, col, castlingRights) &&
-                isMoveLegal(board, selected.row, selected.col, row, col, currentIsWhiteTurn)) {
-
-                movePiece(selected.row, selected.col, row, col);
-                setSelected(null);
-                setValidMoves([]);
-            } else {
-                const piece = board[row][col];
-                if (piece && canPlayerMove(piece, currentIsWhiteTurn)) {
-                    setSelected({ row, col });
-                    const moves = getValidMovesForPiece(board, row, col, castlingRights);
-                    setValidMoves(moves);
-                } else {
-                    setSelected(null);
-                    setValidMoves([]);
-                }
-            }
-        }
-    }
-
-    function movePiece(fromRow, fromCol, toRow, toCol) {
-        const piece = board[fromRow][fromCol];
-        const isKingMove = piece && piece[1] === 'k';
-        const isCastling = isKingMove && fromCol === 4 && Math.abs(toCol - fromCol) === 2;
-
-        let newBoard;
-        if (isCastling) {
-            newBoard = applyCastleMove(board, fromRow, fromCol, toCol);
-        } else {
-            newBoard = board.map(row => [...row]);
-            newBoard[fromRow][fromCol] = null;
-            newBoard[toRow][toCol] = piece;
-        }
-
-        const newRights = updateCastlingRights(castlingRights, fromRow, fromCol, piece);
-        setCastlingRights(newRights);
-
-        const isWhite = piece[0] === 'w';
-        const isPawn = piece[1] === 'p';
-        const isPromotionRow = (isWhite && toRow === 0) || (!isWhite && toRow === 7);
-
-        if (isPawn && isPromotionRow) {
-            setBoard(newBoard);
-            setMoveCount(prev => prev + 1);
-            // Lưu newRights vào pendingPromotion (không dùng state castlingRights vì chưa cập nhật)
-            setPendingPromotion({ row: toRow, col: toCol, isWhite, newBoard, newRights });
-            return;
-        }
-
-        setBoard(newBoard);
-        const newMoveCount = moveCount + 1;
-        setMoveCount(newMoveCount);
-
-        const nextIsWhiteTurn = isWhiteTurn(newMoveCount);
-        const status = getGameStatus(newBoard, nextIsWhiteTurn, newRights);
-        if (status.status === 'checkmate' || status.status === 'stalemate') {
-            setGameOver(true);
-        }
-    }
-
-    function handlePromotion(pieceType) {
-        if (!pendingPromotion) return;
-        const { row, col, isWhite, newBoard, newRights } = pendingPromotion;
-
-        const promotedBoard = newBoard.map(r => [...r]);
-        promotedBoard[row][col] = (isWhite ? 'w' : 'b') + pieceType;
-
-        setBoard(promotedBoard);
-        setPendingPromotion(null);
-
-        // moveCount đã được +1 trong movePiece rồi, dùng thẳng
-        const nextIsWhiteTurn = isWhiteTurn(moveCount);
-        const status = getGameStatus(promotedBoard, nextIsWhiteTurn, newRights);
-        if (status.status === 'checkmate' || status.status === 'stalemate') {
-            setGameOver(true);
-        }
-    }
-
-    useEffect(() => {
-        if (gameOver || !gameStarted || !gameSettings || pendingPromotion) return;
-
-        const currentIsWhiteTurn = isWhiteTurn(moveCount);
-        const playerIsWhite = gameSettings.playerColor === 'white';
-
-        if (currentIsWhiteTurn !== playerIsWhite && !isAIThinking) {
-            const timer = setTimeout(() => {
-                setIsAIThinking(true);
-                const aiMove = getAIMove(board, currentIsWhiteTurn, gameSettings.difficulty);
-
-                if (aiMove) {
-                    const piece = board[aiMove.from.row][aiMove.from.col];
-                    const isKingMove = piece && piece[1] === 'k';
-                    const isCastling = isKingMove && aiMove.from.col === 4 && Math.abs(aiMove.to.col - aiMove.from.col) === 2;
-
-                    let newBoard;
-                    if (isCastling) {
-                        newBoard = applyCastleMove(board, aiMove.from.row, aiMove.from.col, aiMove.to.col);
-                    } else {
-                        newBoard = board.map(row => [...row]);
-                        newBoard[aiMove.from.row][aiMove.from.col] = null;
-                        newBoard[aiMove.to.row][aiMove.to.col] = piece;
-                    }
-
-                    // AI tự động phong hậu
-                    if (piece[1] === 'p' && ((piece[0] === 'w' && aiMove.to.row === 0) || (piece[0] === 'b' && aiMove.to.row === 7))) {
-                        newBoard[aiMove.to.row][aiMove.to.col] = piece[0] + 'q';
-                    }
-
-                    const newRights = updateCastlingRights(castlingRights, aiMove.from.row, aiMove.from.col, piece);
-                    setCastlingRights(newRights);
-
-                    setBoard(newBoard);
-                    const newMoveCount = moveCount + 1;
-                    setMoveCount(newMoveCount);
-
-                    const nextIsWhiteTurn = isWhiteTurn(newMoveCount);
-                    const status = getGameStatus(newBoard, nextIsWhiteTurn, newRights);
-
-                    if (status.status === 'checkmate' || status.status === 'stalemate') {
-                        setGameOver(true);
-                    }
-                }
-
-                setIsAIThinking(false);
-            }, 800 + Math.random() * 400);
-
-            return () => clearTimeout(timer);
-        }
-    }, [moveCount, gameOver, gameStarted, gameSettings, pendingPromotion]);
-
-    if (!gameStarted) {
-        return <GameSetup onStartGame={handleStartGame} />;
-    }
-
-    const currentIsWhiteTurn = isWhiteTurn(moveCount);
-    const gameStatus = getGameStatus(board, currentIsWhiteTurn, castlingRights);
-
+  // ---------- Sảnh ----------
+  if (!game.gameStarted) {
     return (
-        <>
-            <GameInfo
-                gameStatus={gameStatus}
-                gameSettings={gameSettings}
-                gameOver={gameOver}
-                isAIThinking={isAIThinking}
-                resetGame={resetGame}/>
-            <Board
-                board={board}
-                selected={selected}
-                validMoves={validMoves}
-                onCellClick={handleClick}
-                playerIsWhite={gameSettings.playerColor === 'white'}
-            />
-            {pendingPromotion && (
-                <PromotionModal isWhite={pendingPromotion.isWhite} onSelect={handlePromotion} />
-            )}
-        </>
+      <GameSetup
+        onStartGame={game.startGame}
+        hasSavedGame={!!loadGameState()}
+        onContinue={() => window.location.reload()}
+      />
     );
+  }
+
+  const currentIsWhiteTurn = isWhiteTurn(game.moveCount);
+  const gameStatus = getGameStatus(game.board, currentIsWhiteTurn, game.castlingRights);
+  const canUndo = game.boardHistory.length > 0 && !isAIThinking && !game.gameOver;
+
+  return (
+    <>
+      <style>{`@keyframes chessSpin { to { transform: rotate(360deg); } }`}</style>
+
+      {confirmDialog && (
+        <ConfirmDialog
+          message={confirmDialog.message}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
+      <div style={pageStyle}>
+        <TopBar
+          gameSettings={game.gameSettings}
+          gameStatus={gameStatus}
+          isAIThinking={isAIThinking}
+          gameOver={game.gameOver}
+          onReset={game.resetGame}
+          onExit={handleExitToLobby}
+        />
+
+        <div style={mainAreaStyle}>
+          <BoardWithCoords playerIsWhite={playerIsWhite}>
+            <Board
+              board={game.board}
+              selected={input.selected}
+              validMoves={input.validMoves}
+              onCellClick={input.handleCellClick}
+              playerIsWhite={playerIsWhite}
+            />
+          </BoardWithCoords>
+
+          <MoveHistoryPanel
+            history={game.moveHistory}
+            onUndo={game.undoMove}
+            onExitToLobby={handleExitToLobby}
+            onReset={game.resetGame}
+            canUndo={canUndo}
+            gameOver={game.gameOver}
+          />
+        </div>
+      </div>
+
+      {game.pendingPromotion && (
+        <PromotionModal
+          isWhite={game.pendingPromotion.isWhite}
+          onSelect={game.confirmPromotion}
+        />
+      )}
+    </>
+  );
 }
 
-export default App;
+const pageStyle = {
+  minHeight: '100vh',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  padding: '16px',
+  gap: '14px',
+  boxSizing: 'border-box',
+};
+
+const mainAreaStyle = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: '16px',
+};
