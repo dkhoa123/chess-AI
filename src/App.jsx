@@ -27,6 +27,7 @@ export default function App() {
     board: game.board,
     moveCount: game.moveCount,
     castlingRights: game.castlingRights,
+    enPassantTarget: game.enPassantTarget,
     gameOver: game.gameOver,
     gameStarted: game.gameStarted,
     gameSettings: game.gameSettings,
@@ -38,6 +39,7 @@ export default function App() {
     board: game.board,
     moveCount: game.moveCount,
     castlingRights: game.castlingRights,
+    enPassantTarget: game.enPassantTarget,
     gameOver: game.gameOver,
     isAIThinking,
     pendingPromotion: game.pendingPromotion,
@@ -65,7 +67,14 @@ export default function App() {
   }
 
   const currentIsWhiteTurn = isWhiteTurn(game.moveCount);
-  const gameStatus = getGameStatus(game.board, currentIsWhiteTurn, game.castlingRights);
+  const gameStatus = getGameStatus(
+    game.board,
+    currentIsWhiteTurn,
+    game.castlingRights,
+    game.enPassantTarget,
+    game.positionCounts,
+    game.halfmoveClock
+  );
   const canUndo = game.boardHistory.length > 0 && !isAIThinking && !game.gameOver;
 
   return (
@@ -98,6 +107,7 @@ export default function App() {
               validMoves={input.validMoves}
               onCellClick={input.handleCellClick}
               playerIsWhite={playerIsWhite}
+              enPassantTarget={game.enPassantTarget}
             />
           </BoardWithCoords>
 

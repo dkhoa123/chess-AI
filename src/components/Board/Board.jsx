@@ -1,6 +1,6 @@
 import pieceImages from '../../pieceimg.js'
 
-export default function Board({ board, selected, validMoves, onCellClick, playerIsWhite }) {
+export default function Board({ board, selected, validMoves, onCellClick, playerIsWhite, enPassantTarget }) {
     return (
         <div className="board">
             {Array.from({ length: 8 }, (_, i) => playerIsWhite ? i : 7 - i).map(rowIndex =>
@@ -8,7 +8,16 @@ export default function Board({ board, selected, validMoves, onCellClick, player
                     const isValid = validMoves.some(
                       move => move.row === rowIndex && move.col === colIndex
                       );
-                    const isCapture = isValid && board[rowIndex][colIndex] !== null
+                    // Nước bắt tốt qua đường: ô đích trống nhưng vẫn là một nước bắt quân
+                    const isEnPassantCapture = !!(
+                        selected &&
+                        enPassantTarget &&
+                        enPassantTarget.row === rowIndex &&
+                        enPassantTarget.col === colIndex &&
+                        board[selected.row]?.[selected.col]?.[1] === 'p' &&
+                        selected.col !== colIndex
+                    );
+                    const isCapture = (isValid && board[rowIndex][colIndex] !== null) || (isValid && isEnPassantCapture);
                     const piece = board[rowIndex][colIndex];
                     return (
                         <div

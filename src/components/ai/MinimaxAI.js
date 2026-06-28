@@ -1,23 +1,22 @@
 import { getValidMovesForPiece, } from '../gameLogic/gameStatus.js'
 import evaluateBoard from './EvaluateBoard.js'
+import { simulateMove } from './aiMoveHelpers.js'
 
 // ==================== MINIMAX ALGORITHM (Trung bình) ====================
-export function getMinimaxAIMove(board, isWhite, depth = 3) {
+export function getMinimaxAIMove(board, isWhite, depth = 3, castlingRights, enPassantTarget) {
     let bestMove = null;
     let bestScore = -Infinity;
-    
+
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
             const piece = board[row][col];
             if (!piece || piece[0] !== (isWhite ? 'w' : 'b')) continue;
-            
-            const moves = getValidMovesForPiece(board, row, col);
+
+            const moves = getValidMovesForPiece(board, row, col, castlingRights, enPassantTarget);
             moves.forEach(move => {
-                const newBoard = board.map(r => [...r]);
-                newBoard[row][col] = null;
-                newBoard[move.row][move.col] = piece;
-                
-                const score = minimax(newBoard, depth - 1, false, isWhite);
+                const { newBoard, newEnPassantTarget } = simulateMove(board, row, col, move.row, move.col, enPassantTarget);
+
+                const score = minimax(newBoard, depth - 1, false, isWhite, newEnPassantTarget);
                 if (score > bestScore) {
                     bestScore = score;
                     bestMove = { from: { row, col }, to: move };
@@ -25,62 +24,58 @@ export function getMinimaxAIMove(board, isWhite, depth = 3) {
             });
         }
     }
-    
+
     return bestMove;
 }
 
-function minimax(board, depth, isMaximizing, aiIsWhite) {
+function minimax(board, depth, isMaximizing, aiIsWhite, enPassantTarget) {
     if (depth === 0) {
         return evaluateBoard(board, aiIsWhite);
     }
-    
+
     const currentIsWhite = isMaximizing ? aiIsWhite : !aiIsWhite;
-    
+
     if (isMaximizing) {
         let maxScore = -Infinity;
         let hasMove = false;
-        
+
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const piece = board[row][col];
                 if (!piece || piece[0] !== (currentIsWhite ? 'w' : 'b')) continue;
-                
-                const moves = getValidMovesForPiece(board, row, col);
+
+                const moves = getValidMovesForPiece(board, row, col, null, enPassantTarget);
                 moves.forEach(move => {
                     hasMove = true;
-                    const newBoard = board.map(r => [...r]);
-                    newBoard[row][col] = null;
-                    newBoard[move.row][move.col] = piece;
-                    
-                    const score = minimax(newBoard, depth - 1, false, aiIsWhite);
+                    const { newBoard, newEnPassantTarget } = simulateMove(board, row, col, move.row, move.col, enPassantTarget);
+
+                    const score = minimax(newBoard, depth - 1, false, aiIsWhite, newEnPassantTarget);
                     maxScore = Math.max(maxScore, score);
                 });
             }
         }
-        
+
         return hasMove ? maxScore : evaluateBoard(board, aiIsWhite);
     } else {
         let minScore = Infinity;
         let hasMove = false;
-        
+
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const piece = board[row][col];
                 if (!piece || piece[0] !== (currentIsWhite ? 'w' : 'b')) continue;
-                
-                const moves = getValidMovesForPiece(board, row, col);
+
+                const moves = getValidMovesForPiece(board, row, col, null, enPassantTarget);
                 moves.forEach(move => {
                     hasMove = true;
-                    const newBoard = board.map(r => [...r]);
-                    newBoard[row][col] = null;
-                    newBoard[move.row][move.col] = piece;
-                    
-                    const score = minimax(newBoard, depth - 1, true, aiIsWhite);
+                    const { newBoard, newEnPassantTarget } = simulateMove(board, row, col, move.row, move.col, enPassantTarget);
+
+                    const score = minimax(newBoard, depth - 1, true, aiIsWhite, newEnPassantTarget);
                     minScore = Math.min(minScore, score);
                 });
             }
         }
-        
+
         return hasMove ? minScore : evaluateBoard(board, aiIsWhite);
     }
 }

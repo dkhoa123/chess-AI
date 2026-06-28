@@ -1,7 +1,8 @@
 import {canCastle} from './castling.js';
 
-// Kiểm tra nước đi hợp lệ (bao gồm nhập thành)
-export function isValidMove(board, fromRow, fromCol, toRow, toCol, castlingRights) {
+// Kiểm tra nước đi hợp lệ (bao gồm nhập thành và bắt tốt qua đường)
+// enPassantTarget: { row, col } | null - ô mà tốt có thể di chuyển tới để bắt qua đường
+export function isValidMove(board, fromRow, fromCol, toRow, toCol, castlingRights, enPassantTarget) {
     const piece = board[fromRow][fromCol];
     if (!piece) return false;
 
@@ -12,7 +13,7 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, castlingRight
 
     switch (pieceType) {
         case 'p':
-            return isValidPawnMove(board, fromRow, fromCol, toRow, toCol, piece);
+            return isValidPawnMove(board, fromRow, fromCol, toRow, toCol, piece, enPassantTarget);
         case 'r':
             return isValidRookMove(board, fromRow, fromCol, toRow, toCol);
         case 'n':
@@ -28,7 +29,7 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, castlingRight
     }
 }
 
-function isValidPawnMove(board, fromRow, fromCol, toRow, toCol, piece) {
+function isValidPawnMove(board, fromRow, fromCol, toRow, toCol, piece, enPassantTarget) {
     const isWhite = piece[0] === 'w';
     const direction = isWhite ? -1 : 1;
     const startRow = isWhite ? 6 : 1;
@@ -46,6 +47,16 @@ function isValidPawnMove(board, fromRow, fromCol, toRow, toCol, piece) {
         toRow === fromRow + direction &&
         board[toRow][toCol] !== null &&
         board[toRow][toCol][0] !== piece[0]) return true;
+
+    // Bắt tốt qua đường (en passant)
+    if (enPassantTarget &&
+        Math.abs(toCol - fromCol) === 1 &&
+        toRow === fromRow + direction &&
+        toRow === enPassantTarget.row &&
+        toCol === enPassantTarget.col &&
+        board[toRow][toCol] === null) {
+        return true;
+    }
 
     return false;
 }
@@ -110,4 +121,13 @@ export function isPathClear(board, fromRow, fromCol, toRow, toCol) {
     }
 
     return true;
+}
+
+// Quân tốt bị bắt qua đường nằm ở đâu, dựa trên ô đích (to) và hướng đi
+// Dùng khi thực sự thực hiện nước đi en passant trên board
+export function getEnPassantCapturedSquare(toRow, toCol, isWhite) {
+    // Quân tốt bị bắt luôn nằm cùng hàng với quân tốt đi (fromRow), cùng cột với toCol
+    // isWhite đang đi thì quân bị bắt là tốt đen nằm ở hàng toRow + 1 (phía dưới ô đích)
+    const capturedRow = isWhite ? toRow + 1 : toRow - 1;
+    return { row: capturedRow, col: toCol };
 }

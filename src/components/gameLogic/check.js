@@ -1,5 +1,6 @@
 import {isPathClear} from './movement.js'
 import { applyCastleMove } from './castling.js'
+
 // Tìm vị trí vua
 export function findKing(board, isWhite) {
     const kingPiece = isWhite ? 'wk' : 'bk';
@@ -48,15 +49,31 @@ export function isKingInCheck(board, isWhite) {
     return isSquareUnderAttack(board, king.row, king.col, !isWhite);
 }
 
+// Kiểm tra xem nước đi có phải bắt tốt qua đường không (dùng để mô phỏng đúng khi test chiếu)
+function isEnPassantMove(board, fromRow, fromCol, toRow, toCol, enPassantTarget) {
+    const piece = board[fromRow][fromCol];
+    if (!piece || piece[1] !== 'p') return false;
+    if (!enPassantTarget) return false;
+    return toRow === enPassantTarget.row && toCol === enPassantTarget.col &&
+        fromCol !== toCol && board[toRow][toCol] === null;
+}
+
 // Kiểm tra nước đi có hợp lệ sau khi tính chiếu
-export function isMoveLegal(board, fromRow, fromCol, toRow, toCol, isWhite) {
+export function isMoveLegal(board, fromRow, fromCol, toRow, toCol, isWhite, enPassantTarget) {
     const piece = board[fromRow][fromCol];
     const isKingMove = piece && piece[1] === 'k';
     const isCastling = isKingMove && fromCol === 4 && Math.abs(toCol - fromCol) === 2;
+    const isEnPassant = isEnPassantMove(board, fromRow, fromCol, toRow, toCol, enPassantTarget);
 
     let testBoard;
     if (isCastling) {
         testBoard = applyCastleMove(board, fromRow, fromCol, toCol);
+    } else if (isEnPassant) {
+        testBoard = board.map(row => [...row]);
+        const capturedRow = isWhite ? toRow + 1 : toRow - 1;
+        testBoard[capturedRow][toCol] = null;
+        testBoard[fromRow][fromCol] = null;
+        testBoard[toRow][toCol] = piece;
     } else {
         testBoard = board.map(row => [...row]);
         testBoard[fromRow][fromCol] = null;
@@ -106,6 +123,3 @@ function isValidMoveLogic(board, fromRow, fromCol, toRow, toCol, pieceType) {
             return false;
     }
 }
-
-
-

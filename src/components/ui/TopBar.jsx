@@ -4,6 +4,9 @@ const STATUS_COLOR = {
   checkmate: '#e74c3c',
   check:     '#e67e22',
   stalemate: '#3498db',
+  insufficient_material: '#3498db',
+  fifty_move: '#3498db',
+  threefold_repetition: '#3498db',
 };
 
 export default function TopBar({ gameSettings, gameStatus, isAIThinking, gameOver, onReset, onExit }) {

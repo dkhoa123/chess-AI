@@ -3,7 +3,7 @@ import { isWhiteTurn } from '../gameLogic/turn.js';
 import { getAIMove } from '../ai/AI.js';
 
 // Hook kích hoạt AI đi khi đến lượt
-export function useAIMove({ board, moveCount, castlingRights, gameOver, gameStarted, gameSettings, pendingPromotion, onMove }) {
+export function useAIMove({ board, moveCount, castlingRights, enPassantTarget, gameOver, gameStarted, gameSettings, pendingPromotion, onMove }) {
   const [isAIThinking, setIsAIThinking] = useState(false);
 
   useEffect(() => {
@@ -15,7 +15,7 @@ export function useAIMove({ board, moveCount, castlingRights, gameOver, gameStar
 
     const timer = setTimeout(() => {
       setIsAIThinking(true);
-      const aiMove = getAIMove(board, currentIsWhiteTurn, gameSettings.difficulty);
+      const aiMove = getAIMove(board, currentIsWhiteTurn, gameSettings.difficulty, castlingRights, enPassantTarget);
       if (aiMove) {
         onMove(aiMove.from.row, aiMove.from.col, aiMove.to.row, aiMove.to.col, false);
       }

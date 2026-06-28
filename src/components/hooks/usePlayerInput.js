@@ -5,7 +5,7 @@ import { getValidMovesForPiece } from '../gameLogic/gameStatus.js';
 import { isWhiteTurn, canPlayerMove } from '../gameLogic/turn.js';
 
 // Hook quản lý click bàn cờ, ô được chọn, valid moves
-export function usePlayerInput({ board, moveCount, castlingRights, gameOver, isAIThinking, pendingPromotion, playerIsWhite, onMove, onSaveSnapshot }) {
+export function usePlayerInput({ board, moveCount, castlingRights, enPassantTarget, gameOver, isAIThinking, pendingPromotion, playerIsWhite, onMove, onSaveSnapshot }) {
   const [selected, setSelected]     = useState(null);
   const [validMoves, setValidMoves] = useState([]);
 
@@ -18,7 +18,7 @@ export function usePlayerInput({ board, moveCount, castlingRights, gameOver, isA
     const piece = board[row][col];
     if (piece && canPlayerMove(piece, isWhiteTurn(moveCount))) {
       setSelected({ row, col });
-      setValidMoves(getValidMovesForPiece(board, row, col, castlingRights));
+      setValidMoves(getValidMovesForPiece(board, row, col, castlingRights, enPassantTarget));
     } else {
       clearSelection();
     }
@@ -38,8 +38,8 @@ export function usePlayerInput({ board, moveCount, castlingRights, gameOver, isA
 
     // Đã chọn quân — thử đi
     const isLegal =
-      isValidMove(board, selected.row, selected.col, row, col, castlingRights) &&
-      isMoveLegal(board, selected.row, selected.col, row, col, currentIsWhiteTurn);
+      isValidMove(board, selected.row, selected.col, row, col, castlingRights, enPassantTarget) &&
+      isMoveLegal(board, selected.row, selected.col, row, col, currentIsWhiteTurn, enPassantTarget);
 
     if (isLegal) {
       onSaveSnapshot();
